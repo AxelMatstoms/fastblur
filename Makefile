@@ -1,0 +1,41 @@
+TARGET = fastblur
+CC = gcc
+CFLAGS = -Wall -O3 -std=c11
+LDFLAGS = -lm
+BIN = bin
+SRCS := $(wildcard src/*.c)
+OBJS := $(SRCS:src/%.c=$(BIN)/%.o)
+HDRS := $(wildcard src/*.h)
+
+DBG = dbg
+DBG_TARGET = $(DBG)/$(TARGET)
+DBG_BIN = $(DBG)/$(BIN)
+DBG_CFLAGS = -Og -ggdb
+
+.PHONY: default all clean debug
+
+default: $(TARGET)
+all: default
+
+$(BIN)/%.o: src/%.c $(HDRS) | $(BIN)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(DBG):
+$(BIN):
+	mkdir -p $@
+
+$(TARGET): $(OBJS)
+	$(CC) $^ $(CFLAGS) $(LDFLAGS) -o $@
+
+clean:
+	-rm -f $(BIN)/*.o
+	-rm -f $(TARGET)
+	-rm -f $(DBG_BIN)/*.o
+	-rm -f $(DBG_TARGET)
+
+$(DBG_TARGET): | $(DBG)
+	$(MAKE) $(MAKEFILE) TARGET="$(DBG_TARGET)" \
+		BIN="$(DBG_BIN)" CFLAGS="$(CFLAGS) $(DBG_CFLAGS)"
+
+debug: $(DBG_TARGET)
+	gdb ./$<
