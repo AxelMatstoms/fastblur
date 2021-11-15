@@ -1,9 +1,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include <math.h>
 
 #include <time.h>
+
+#include <argp.h>
 
 #include "stb_image.h"
 #include "stb_image_write.h"
@@ -26,9 +29,23 @@ struct img {
     float *pixels;
 };
 
+struct arguments {
+    char *output_file;
+    char *input_file;
+    bool fast_gamma;
+    unsigned blur_size;
+    unsigned blur_passes;
+};
+
 float gamma_decode_lut[256];
 
+const char *argp_program_version =
+    "fastblur 0.1.0";
 
+static char doc[] =
+    "fastblur -- quickly blur images with efficient filtering";
+
+static char args_doc[] = "FILE";
 
 void img_alloc(struct img *img)
 {
@@ -58,28 +75,25 @@ void init_gamma_decode_lut()
     }
 }
 
-float gamma_decode(uint8_t v)
+float fast_gamma_decode(uint8_t v)
 {
-#ifdef FAST_GAMMA
     static const float scale_factor = 1.0f / 255.0f;
 
     float x = v * scale_factor;
     return x * x;
-#else
-    return gamma_decode_lut[v];
-#endif /* FAST_GAMMA */
 }
 
 uint8_t gamma_encode(float v)
 {
-#ifdef FAST_GAMMA
-    return (uint8_t) (255.0f * sqrtf(v) + 0.5f);
-#else
     return (uint8_t) (255.0f * powf(v, 1.0f / GAMMA) + 0.5f);
-#endif /* FAST_GAMMA */
 }
 
-void img_load(struct img *img, char *pathname)
+uint8_t fast_gamma_encode(float v)
+{
+    return (uint8_t) (255.0f * sqrtf(v) + 0.5f);
+}
+
+void img_load(struct img *img, char *pathname, bool fast_gamma)
 {
     img->size = 0;
     img->pixels = NULL;
@@ -87,12 +101,21 @@ void img_load(struct img *img, char *pathname)
     int channels;
     uint8_t *pixels = stbi_load(pathname, &img->width, &img->height, &channels, 3);
 
+    if (!pixels) {
+        fprintf(stderr, "fastblur: cannot load image from '%s'.\n", pathname);
+        exit(1);
+    }
+
     img_alloc(img);
     int size = 3 * img->width * img->height;
 
     clock_t start = clock();
     for (size_t i = 0; i < size; i++) {
-        img->pixels[i] = gamma_decode(pixels[i]);
+        if (fast_gamma) {
+            img->pixels[i] = fast_gamma_decode(pixels[i]);
+        } else {
+            img->pixels[i] = gamma_decode_lut[pixels[i]];
+        }
     }
     clock_t end = clock();
     double ms = (end - start) * 1000.0 / CLOCKS_PER_SEC;;
@@ -101,7 +124,7 @@ void img_load(struct img *img, char *pathname)
     free(pixels);
 }
 
-void img_save_png(struct img *img, char *pathname)
+void img_save_png(struct img *img, char *pathname, bool fast_gamma)
 {
     size_t size = 3 * img->width * img->height;
     uint8_t *pixels = malloc(sizeof(uint8_t) * size);
@@ -109,7 +132,11 @@ void img_save_png(struct img *img, char *pathname)
     clock_t start = clock();
 
     for (size_t i = 0; i < size; i++) {
-        pixels[i] = gamma_encode(img->pixels[i]);
+        if (fast_gamma) {
+            pixels[i] = fast_gamma_encode(img->pixels[i]);
+        } else {
+            pixels[i] = gamma_encode(img->pixels[i]);
+        }
     }
 
     clock_t end = clock();
@@ -184,20 +211,84 @@ void img_mov_avg_h(struct img *src, struct img *dst, int n)
     }
 }
 
-int main(int argc, char **argv)
+static error_t parse_opt(int key, char *arg, struct argp_state *state)
 {
-    int blur_size = 51;
-    int passes = 4;
-    if (argc != 2) {
-        return 0;
+    struct arguments *arguments = state->input;
+
+    switch (key) {
+        case 'o':
+            arguments->output_file = arg;
+            break;
+        case 'G':
+            arguments->fast_gamma = true;
+            break;
+        case 'b':
+            {
+                char *end;
+                int size = strtol(arg, &end, 10);
+                if (end == arg || size < 1)
+                    argp_error(state, "invalid size, must be at least 1.");
+                if (size % 2 == 0)
+                    argp_error(state, "invalid size, must be odd");
+
+                arguments->blur_size = size;
+            }
+            break;
+        case 'p':
+            {
+                char *end;
+                int passes = strtoul(arg, &end, 10);
+                if (end == arg || passes < 1)
+                    argp_error(state, "invalid count, must be at least 1.");
+                    
+                arguments->blur_passes = passes;
+            }
+            break;
+        case ARGP_KEY_ARG:
+            if (state->arg_num >= 1)
+                argp_usage(state);
+            arguments->input_file = arg;
+            break;
+        case ARGP_KEY_END:
+            if (state->arg_num < 1)
+                argp_usage(state);
+            break;
+        default:
+            return ARGP_ERR_UNKNOWN;
     }
 
-#ifndef FAST_GAMMA
-    init_gamma_decode_lut();
-#endif /* FAST_GAMMA */
+    return 0;
+}
+
+int main(int argc, char **argv)
+{
+    const struct argp_option options[] = {
+        {"output",      'o', "FILE",  0, "Output to FILE" },
+        {"fast-gamma",  'G', 0,       0, "Use fast, less accurate gamma" },
+        {"blur-size",   'b', "SIZE",  0,
+         "Use a moving average filter of length SIZE" },
+        {"blur-passes", 'p', "COUNT", 0, "Do COUNT filter passes" },
+        { 0 }
+    };
+
+    struct argp argp = {options, parse_opt, args_doc, doc};
+
+    struct arguments arguments;
+    arguments.output_file = "out.png";
+    arguments.fast_gamma = false;
+    arguments.blur_size = 31;
+    arguments.blur_passes = 4;
+
+    argp_parse(&argp, argc, argv, 0, 0, &arguments);
+
+    int passes = arguments.blur_passes;
+    int blur_size = arguments.blur_size;
+
+    if (!arguments.fast_gamma)
+        init_gamma_decode_lut();
 
     struct img img;
-    img_load(&img, argv[1]);
+    img_load(&img, arguments.input_file, arguments.fast_gamma);
 
     struct img img2 = { .width = img.width, .height = img.height };
     img_alloc(&img2);
@@ -220,5 +311,5 @@ int main(int argc, char **argv)
 
     img_transpose(src, dst);
 
-    img_save_png(dst, "out.png");
+    img_save_png(dst, arguments.output_file, arguments.fast_gamma);
 }
