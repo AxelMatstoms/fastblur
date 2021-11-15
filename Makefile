@@ -3,14 +3,14 @@ CC = gcc
 CFLAGS = -Wall -O3 -std=c11
 LDFLAGS = -lm
 BIN = bin
-SRCS := $(wildcard src/*.c)
-OBJS := $(SRCS:src/%.c=$(BIN)/%.o)
-HDRS := $(wildcard src/*.h)
+SRCS = $(wildcard src/*.c)
+OBJS = $(SRCS:src/%.c=$(BIN)/%.o)
+HDRS = $(wildcard src/*.h)
 
 DBG = dbg
-DBG_TARGET = $(DBG)/$(TARGET)
-DBG_BIN = $(DBG)/$(BIN)
-DBG_CFLAGS = -Og -ggdb
+DBG_TARGET := $(DBG)/$(TARGET)
+DBG_BIN := $(DBG)/$(BIN)
+DBG_CFLAGS = -Og -ggdb -DDEBUG
 
 .PHONY: default all clean debug
 
@@ -33,7 +33,7 @@ clean:
 	-rm -f $(DBG_BIN)/*.o
 	-rm -f $(DBG_TARGET)
 
-$(DBG_TARGET): | $(DBG)
+$(DBG_TARGET): $(SRCS) $(HDRS)| $(DBG)
 	$(MAKE) $(MAKEFILE) TARGET="$(DBG_TARGET)" \
 		BIN="$(DBG_BIN)" CFLAGS="$(CFLAGS) $(DBG_CFLAGS)"
 
