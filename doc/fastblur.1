@@ -1,0 +1,50 @@
+.TH FASTBLUR 1 2021-11-25
+.SH NAME
+fastblur \- quickly blur images with efficient filtering
+.SH SYNOPSIS
+.B fastblur
+.RI [ OPTION ]...
+.I SOURCE
+.I DEST
+.SH DESCRIPTION
+Blur the image in \fIsource\fR and write the blurred image to \fIdest\fR. fastblur uses
+efficient filtering techniques to produce an output similar to true gaussian blur
+(depending on options) but in a fraction of the time.
+.PP
+fastblur uses multiple passes of a moving average filter. Repeated moving average
+filters converges to a gaussian kernel. More passes gives more accurate guassian blur
+gives diminishing returns.
+.PP
+The moving average filter is implemented as a recursive filter meaning that, as opposed to other image blurring software, blur size does not impact performance significantly.
+.SH OPTIONS
+.TP
+.BR \-G ", " \-\-fast\-gamma
+Use a fast approximation for gamma encoding and decoding. Improves performance of the gamma encoding step by an order of magnitude. Produces slightly inaccurate results, especially in dark regions.
+.TP
+\fB\-p\fR, \fB\-\-blur\-passes\fR=\fIcount
+Run \fIcount\fR passes of the moving average filter in each direction.
+.TP
+\fB\-r\fR, \fB\-\-resize\fR=\fIgeometry
+Resize the image before blurring. Uses the nearest neighbor interpolation method.
+The argument has the format <\fIwidth\fR>\fBx\fR<\fIheight\fR>[\fB@\fR<\fIgravity\fR>]. If resizing to a new aspect ratio, the resized image fills the original image in one dimension and the \fIgravity\fR argument controls the position along the other dimension.
+.TP
+\fB\-\-raw\fR=\fIformat
+Assume \fIsource\fR is a "raw" bitmap file, i.e a file containing only bitmap data, no metadata.
+The argument has the format <\fIwidth\fR>\fBx\fR<\fIheight\fR>\fB:\fR<\fIpixfmt\fR> where
+\fIpixfmt\fR is one of the following: \fBrgb\fR, \fBrgba\fR, \fBargb\fR,\fBbgr\fR,
+\fBbgra\fR, \fBabgr\fR.
+.TP
+\fB\-z\fR, \fB\-\-blur\-size\fR=\fIsize
+Set the length of the moving average filter to \fIsize\fR.
+.TP
+\fB\-?\fR, \fB\-\-help
+Print a help message describing arguments, then exit.
+.TP
+\fB\-\-usage
+Print a short usage message, then exit.
+.TP
+\fB\-V\fR, \fB\-\-version
+Print program version, then exit.
+.SH AUTHOR
+Written by Axel Matstoms
+

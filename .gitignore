@@ -1,4 +1,5 @@
 bin/
 dbg/
 fastblur
-*.png
+/*.png
+/*.jpg

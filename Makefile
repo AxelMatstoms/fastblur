@@ -1,6 +1,6 @@
 TARGET = fastblur
 CC = gcc
-CFLAGS = -Wall -O3 -std=c11
+CFLAGS = -Wall -O3 -std=c11 #-DMEASURE_PERF_ENABLE
 LDFLAGS = -lm
 BIN = bin
 SRCS = $(wildcard src/*.c)
@@ -10,14 +10,14 @@ HDRS = $(wildcard src/*.h)
 DBG = dbg
 DBG_TARGET := $(DBG)/$(TARGET)
 DBG_BIN := $(DBG)/$(BIN)
-DBG_CFLAGS = -Og -ggdb -DDEBUG
+DBG_CFLAGS = -O0 -ggdb -DDEBUG
 
 .PHONY: default all clean debug
 
 default: $(TARGET)
 all: default
 
-$(BIN)/%.o: src/%.c $(HDRS) | $(BIN)
+$(BIN)/%.o: src/%.c $(HDRS) Makefile | $(BIN)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(DBG):
